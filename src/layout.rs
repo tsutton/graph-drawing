@@ -20,6 +20,10 @@ impl Vector {
             y: self.y * factor,
         }
     }
+
+    pub fn len(&self) -> f64 {
+        (self.x.powi(2) + self.y.powi(2)).sqrt()
+    }
 }
 
 impl std::ops::Add for Vector {
@@ -88,6 +92,7 @@ mod test {
                 case.expected_unit.into(),
                 "case {i}"
             );
+            assert_eq!(left.unit_vector_to(&right).len(), 1.0);
         }
     }
 }

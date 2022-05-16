@@ -3,10 +3,10 @@ use svg::{node, Document};
 
 use graph_drawing::graph::{cycle_graph, grid_graph, Graph};
 use graph_drawing::layout::Vector;
-use graph_drawing::EadesDrawer;
+use graph_drawing::FruchtermanReingoldDrawer;
 
 fn main() {
-    let drawer = EadesDrawer::my_best_guess();
+    let drawer = FruchtermanReingoldDrawer::my_best_guess();
 
     let graph = grid_graph(3);
     let positions = drawer.draw(&graph);
