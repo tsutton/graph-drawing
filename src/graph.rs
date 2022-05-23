@@ -26,6 +26,10 @@ impl Graph {
             .get(&(node1.min(node2), node1.max(node2)))
             .copied()
     }
+
+    pub fn edges(&'_ self) -> impl Iterator<Item = ((usize, usize), usize)> + '_ {
+        self.weights.iter().map(|((a, b), c)| ((*a, *b), *c))
+    }
 }
 
 impl Default for Graph {

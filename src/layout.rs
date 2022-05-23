@@ -6,7 +6,7 @@ pub struct Vector {
 
 impl Vector {
     pub fn distance_to(&self, v: &Vector) -> f64 {
-        ((self.x - v.x) * (self.x - v.x) + (self.y - v.y) * (self.y - v.y)).sqrt()
+        ((self.x - v.x).powi(2) + (self.y - v.y).powi(2)).sqrt()
     }
 
     pub fn unit_vector_to(&self, v: &Vector) -> Vector {

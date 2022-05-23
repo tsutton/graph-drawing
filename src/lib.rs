@@ -1,6 +1,8 @@
 pub mod graph;
 pub mod layout;
 
+use std::f64::consts::PI;
+
 use crate::graph::Graph;
 
 use layout::Vector;
@@ -87,15 +89,17 @@ pub struct FruchtermanReingoldDrawer {
     width: f64,
     height: f64,
     initial_temperature: f64,
+    init_strategy: InitializationStrategy,
 }
 
 impl FruchtermanReingoldDrawer {
     pub fn my_best_guess() -> Self {
         Self {
-            iterations: 100,
+            iterations: 500,
             width: 400.0,
             height: 400.0,
             initial_temperature: 40.0,
+            init_strategy: InitializationStrategy::RegularPolygon,
         }
     }
 
@@ -103,12 +107,14 @@ impl FruchtermanReingoldDrawer {
         let mut positions: Vec<Vector> = Vec::with_capacity(graph.nodes);
         let ideal_distance = (self.width * self.height / graph.nodes as f64).sqrt();
 
-        // initialize
-        for _ in 0..graph.nodes {
-            let x_rand: f64 = rand::random();
-            let y_rand: f64 = rand::random();
-            positions.push((x_rand * self.width, y_rand * self.height).into())
-        }
+        self.init_strategy.initialize(
+            graph.nodes,
+            &mut positions,
+            0.0,
+            self.width,
+            0.0,
+            self.height,
+        );
 
         let mut temperature = self.initial_temperature;
         for _ in 0..self.iterations {
@@ -127,7 +133,7 @@ impl FruchtermanReingoldDrawer {
                     displacements[second_node] =
                         displacements[second_node] + unit_vec.scaled(repel_factor);
 
-                    if let Some(weight) = graph.edge_weight(first_node, second_node) {
+                    if graph.edge_weight(first_node, second_node).is_some() {
                         let attractive_factor = current_distance.powi(2) / ideal_distance;
                         displacements[first_node] =
                             displacements[first_node] + unit_vec.scaled(attractive_factor);
@@ -145,11 +151,62 @@ impl FruchtermanReingoldDrawer {
                 };
                 debug_assert!(temperature * 1.01 >= displacement.len());
                 positions[i] = positions[i] + displacement;
+                // TODO maybe instead of forcing inside the box, do a post-processing to translate/scale back to within the box?
                 positions[i].x = positions[i].x.max(0.0).min(self.width);
                 positions[i].y = positions[i].y.max(0.0).min(self.height);
             }
             temperature -= self.initial_temperature / self.iterations as f64;
         }
         positions
+    }
+}
+enum InitializationStrategy {
+    Random,
+    RegularPolygon,
+}
+
+impl InitializationStrategy {
+    fn initialize(
+        &self,
+        node_count: usize,
+        positions: &mut Vec<Vector>,
+        min_x: f64,
+        max_x: f64,
+        min_y: f64,
+        max_y: f64,
+    ) {
+        match self {
+            InitializationStrategy::Random => {
+                for _ in 0..node_count {
+                    let x_rand: f64 = rand::random();
+                    let y_rand: f64 = rand::random();
+                    positions.push(
+                        (
+                            x_rand * (max_x - min_x) + min_x,
+                            y_rand * (max_y - min_y) + min_y,
+                        )
+                            .into(),
+                    )
+                }
+            }
+            InitializationStrategy::RegularPolygon => {
+                let center_x = (max_x + min_x) / 2.0;
+                let center_y = (max_y + min_y) / 2.0;
+                let scale_factor_x = (max_x - min_x) / 2.0;
+                let scale_factor_y = (max_y - min_y) / 2.0;
+                for i in 0..node_count {
+                    let angle = 2.0 * PI / node_count as f64 * i as f64;
+                    let unit_circle_x = angle.cos();
+                    let unit_circle_y = angle.sin();
+                    positions.push(
+                        (
+                            unit_circle_x * scale_factor_x + center_x,
+                            unit_circle_y * scale_factor_y + center_y,
+                        )
+                            .into(),
+                    );
+                }
+            }
+        }
     }
 }
