@@ -30,6 +30,50 @@ impl Graph {
     pub fn edges(&'_ self) -> impl Iterator<Item = ((usize, usize), usize)> + '_ {
         self.weights.iter().map(|((a, b), c)| ((*a, *b), *c))
     }
+
+    pub fn all_pairs_shortest_paths(&self) -> HashMap<(usize, usize), usize> {
+        // We follow Floyd-Warshall (simplified for undirected graphs):
+        // Incrementally solve and store the subproblems APSP(from_vertex, to_vertex)
+        // which may be Some(value), or None if the vertices aren't connected yet.
+        // Note that for us (as opposed to Wikipedia), we number vertices from 0.
+        let mut subproblem_cache: HashMap<(usize, usize), usize> = HashMap::new();
+
+        // as a base case, for vertices that have an actual edge beteween them, there are no intermediate
+        // vertices needed
+        for ((i, j), w) in self.edges() {
+            subproblem_cache.insert((i, j), w);
+            // This is the the part where undirected is used
+            subproblem_cache.insert((j, i), w);
+        }
+        for i in 0..self.nodes {
+            subproblem_cache.insert((i, i), 0);
+        }
+
+        // We'll frame this iteratively (as opposed to recursively).
+        for intermediate in 0..self.nodes {
+            let mut next_subproblem_cache: HashMap<(usize, usize), usize> = HashMap::new();
+            for from_vertex in 0..self.nodes {
+                for to_vertex in 0..self.nodes {
+                    let previous = subproblem_cache.get(&(from_vertex, to_vertex)).copied();
+                    let using_k: Option<usize> = subproblem_cache
+                        .get(&(from_vertex, intermediate))
+                        .zip(subproblem_cache.get(&(intermediate, to_vertex)))
+                        .map(|(x, y)| x + y);
+                    match (previous, using_k) {
+                        (None, None) => {}
+                        (Some(x), None) | (None, Some(x)) => {
+                            next_subproblem_cache.insert((from_vertex, to_vertex), x);
+                        }
+                        (Some(x), Some(y)) => {
+                            next_subproblem_cache.insert((from_vertex, to_vertex), x.min(y));
+                        }
+                    }
+                }
+            }
+            subproblem_cache = next_subproblem_cache;
+        }
+        subproblem_cache
+    }
 }
 
 impl Default for Graph {
