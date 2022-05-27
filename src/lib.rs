@@ -1,7 +1,7 @@
 pub mod graph;
 pub mod layout;
 
-use std::f64::consts::PI;
+use std::{cmp::Ordering, collections::HashMap, f64::consts::PI};
 
 use crate::graph::Graph;
 
@@ -160,7 +160,167 @@ impl FruchtermanReingoldDrawer {
         positions
     }
 }
-enum InitializationStrategy {
+
+pub struct KamadaKawaiDrawer {
+    maximum_allowed_energy_derivative: f64,
+    width: f64,
+    height: f64,
+    init_strategy: InitializationStrategy,
+}
+
+impl KamadaKawaiDrawer {
+    // K scales energy, and all derivs, etc. So double it should double max energy, etc
+    const K: f64 = 1.0;
+
+    pub fn my_best_guess() -> Self {
+        Self {
+            width: 400.0,
+            height: 400.0,
+            maximum_allowed_energy_derivative: 1.0,
+            init_strategy: InitializationStrategy::RegularPolygon,
+        }
+    }
+
+    pub fn draw(&self, graph: &Graph) -> Vec<Vector> {
+        if graph.nodes == 0 {
+            return Vec::new();
+        }
+        let mut positions: Vec<Vector> = Vec::with_capacity(graph.nodes);
+
+        self.init_strategy.initialize(
+            graph.nodes,
+            &mut positions,
+            0.0,
+            self.width,
+            0.0,
+            self.height,
+        );
+
+        let distances = graph.all_pairs_shortest_paths();
+        let max_distance = *distances.values().max().expect("graph to be nonempty");
+        let draw_distance = self.width.min(self.height) / max_distance as f64;
+
+        let mut deltas: Vec<f64> = (0..graph.nodes)
+            .map(|i| {
+                let (dx, dy) =
+                    Self::jacobian(i, graph.nodes, &positions, &distances, draw_distance);
+                (dx.powi(2) + dy.powi(2)).sqrt()
+            })
+            .collect();
+        loop {
+            // Possible optimizations:
+            // - share subexpressions between jacobians and hessian
+            // - don't recalc jacobian when solving hessian system
+            let (m, max_delta) = deltas
+                .iter()
+                .enumerate()
+                .max_by(|(_, f), (_, g)| match f.partial_cmp(g) {
+                    Some(i) => i,
+                    // if we have NaN or inf, ???
+                    None => Ordering::Less,
+                })
+                .expect("graph to be nonempty");
+            if *max_delta < self.maximum_allowed_energy_derivative {
+                break;
+            }
+            // eprintln!("max delta {} at vertex {}", max_delta, m);
+            let hessian = Self::hessian_m(m, graph.nodes, &positions, &distances, draw_distance);
+            let jacobian = Self::jacobian(m, graph.nodes, &positions, &distances, draw_distance);
+            let hessian_det = det(hessian);
+            let delta_x =
+                det([[-jacobian.0, hessian[0][1]], [-jacobian.1, hessian[1][1]]]) / hessian_det;
+            let delta_y =
+                det([[hessian[0][0], -jacobian.0], [hessian[1][0], -jacobian.1]]) / hessian_det;
+            debug_assert!(
+                (delta_x * hessian[0][0] + delta_y * hessian[0][1] + jacobian.0) / jacobian.0
+                    < 0.01,
+            );
+            debug_assert!(
+                (delta_x * hessian[1][0] + delta_y * hessian[1][1] + jacobian.1) / jacobian.1
+                    < 0.01,
+            );
+            // TODO this is supposed to be +, not -, I must have flipped a sign some where, but I can't find where...
+            positions[m].x -= delta_x;
+            positions[m].y -= delta_y;
+            let (new_dx, new_dy) =
+                Self::jacobian(m, graph.nodes, &positions, &distances, draw_distance);
+            deltas[m] = (new_dx.powi(2) + new_dy.powi(2)).sqrt();
+        }
+        positions
+    }
+
+    fn jacobian(
+        m: usize,
+        nodes: usize,
+        positions: &[Vector],
+        distances: &HashMap<(usize, usize), usize>,
+        draw_distance: f64,
+    ) -> (f64, f64) {
+        (0..nodes)
+            .map(|i| {
+                if i == m {
+                    (0.0, 0.0)
+                } else {
+                    let distance = distances[&(m, i)] as f64;
+                    let k_mi = Self::K / distance.powi(2);
+                    let l_mi = draw_distance * distance;
+                    let denominator = positions[m].distance_to(&positions[i]);
+                    (
+                        k_mi * (positions[m].x - positions[i].x) * (1.0 - l_mi / denominator),
+                        k_mi * (positions[m].y - positions[i].y) * (1.0 - l_mi / denominator),
+                    )
+                }
+            })
+            .reduce(|(x1, y1), (x2, y2)| (x1 + x2, y1 + y2))
+            .unwrap()
+    }
+
+    // Matrix:
+    // [ [dxdx dxdy]
+    //   [dydx dydy] ]
+    fn hessian_m(
+        m: usize,
+        nodes: usize,
+        positions: &[Vector],
+        distances: &HashMap<(usize, usize), usize>,
+        draw_distance: f64,
+    ) -> [[f64; 2]; 2] {
+        let (dx_dx, dx_dy, dy_dx, dy_dy) = (0..nodes)
+            .map(|i| {
+                if i == m {
+                    (0.0, 0.0, 0.0, 0.0)
+                } else {
+                    let distance = distances[&(m, i)] as f64;
+                    let k_mi = Self::K / distance.powi(2);
+                    let l_mi = draw_distance * distance;
+                    let denominator = positions[m].distance_to(&positions[i]);
+                    (
+                        k_mi * (1.0
+                            - l_mi * (positions[m].y - positions[i].y).powi(2) / denominator),
+                        k_mi * (l_mi
+                            * (positions[m].y - positions[i].y)
+                            * (positions[m].x - positions[i].x)
+                            / denominator),
+                        k_mi * (l_mi
+                            * (positions[m].y - positions[i].y)
+                            * (positions[m].x - positions[i].x)
+                            / denominator),
+                        k_mi * (1.0
+                            - l_mi * (positions[m].x - positions[i].x).powi(2) / denominator),
+                    )
+                }
+            })
+            .reduce(|(a1, b1, c1, d1), (a2, b2, c2, d2)| (a1 + a2, b1 + b2, c1 + c2, d1 + d2))
+            .unwrap();
+        [[dx_dx, dx_dy], [dy_dx, dy_dy]]
+    }
+}
+
+fn det(matrix: [[f64; 2]; 2]) -> f64 {
+    matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0]
+}
+
+pub enum InitializationStrategy {
     Random,
     RegularPolygon,
 }
