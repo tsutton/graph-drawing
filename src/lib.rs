@@ -1,11 +1,12 @@
 pub mod graph;
 pub mod layout;
 
-use std::{cmp::Ordering, collections::HashMap, f64::consts::PI};
+use std::{cmp::Ordering, f64::consts::PI};
 
 use crate::graph::Graph;
 
 use layout::Vector;
+use rand::prelude::SliceRandom;
 
 pub struct EadesDrawer {
     hooke_constant: f64,
@@ -177,7 +178,7 @@ impl KamadaKawaiDrawer {
             width: 400.0,
             height: 400.0,
             maximum_allowed_energy_derivative: 1.0,
-            init_strategy: InitializationStrategy::RegularPolygon,
+            init_strategy: InitializationStrategy::RegularPolygonRandomizedOrder,
         }
     }
 
@@ -197,7 +198,12 @@ impl KamadaKawaiDrawer {
         );
 
         let distances = graph.all_pairs_shortest_paths();
-        let max_distance = *distances.values().max().expect("graph to be nonempty");
+        let max_distance = distances
+            .iter()
+            .flatten()
+            .map(|x| x.expect("graph to be connected"))
+            .max()
+            .expect("graph to be nonempty");
         let draw_distance = self.width.min(self.height) / max_distance as f64;
 
         let mut deltas: Vec<f64> = (0..graph.nodes)
@@ -223,7 +229,6 @@ impl KamadaKawaiDrawer {
             if *max_delta < self.maximum_allowed_energy_derivative {
                 break;
             }
-            // eprintln!("max delta {} at vertex {}", max_delta, m);
             let hessian = Self::hessian_m(m, graph.nodes, &positions, &distances, draw_distance);
             let jacobian = Self::jacobian(m, graph.nodes, &positions, &distances, draw_distance);
             let hessian_det = det(hessian);
@@ -253,7 +258,7 @@ impl KamadaKawaiDrawer {
         m: usize,
         nodes: usize,
         positions: &[Vector],
-        distances: &HashMap<(usize, usize), usize>,
+        distances: &[Vec<Option<usize>>],
         draw_distance: f64,
     ) -> (f64, f64) {
         (0..nodes)
@@ -261,7 +266,7 @@ impl KamadaKawaiDrawer {
                 if i == m {
                     (0.0, 0.0)
                 } else {
-                    let distance = distances[&(m, i)] as f64;
+                    let distance = distances[m][i].unwrap() as f64;
                     let k_mi = Self::K / distance.powi(2);
                     let l_mi = draw_distance * distance;
                     let denominator = positions[m].distance_to(&positions[i]);
@@ -282,7 +287,7 @@ impl KamadaKawaiDrawer {
         m: usize,
         nodes: usize,
         positions: &[Vector],
-        distances: &HashMap<(usize, usize), usize>,
+        distances: &[Vec<Option<usize>>],
         draw_distance: f64,
     ) -> [[f64; 2]; 2] {
         let (dx_dx, dx_dy, dy_dx, dy_dy) = (0..nodes)
@@ -290,7 +295,7 @@ impl KamadaKawaiDrawer {
                 if i == m {
                     (0.0, 0.0, 0.0, 0.0)
                 } else {
-                    let distance = distances[&(m, i)] as f64;
+                    let distance = distances[m][i].unwrap() as f64;
                     let k_mi = Self::K / distance.powi(2);
                     let l_mi = draw_distance * distance;
                     let denominator = positions[m].distance_to(&positions[i]);
@@ -323,6 +328,7 @@ fn det(matrix: [[f64; 2]; 2]) -> f64 {
 pub enum InitializationStrategy {
     Random,
     RegularPolygon,
+    RegularPolygonRandomizedOrder,
 }
 
 impl InitializationStrategy {
@@ -366,6 +372,12 @@ impl InitializationStrategy {
                             .into(),
                     );
                 }
+            }
+            InitializationStrategy::RegularPolygonRandomizedOrder => {
+                let start_idx = positions.len();
+                InitializationStrategy::RegularPolygon
+                    .initialize(node_count, positions, min_x, max_x, min_y, max_y);
+                positions[start_idx..].shuffle(&mut rand::thread_rng());
             }
         }
     }
