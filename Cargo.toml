@@ -15,5 +15,12 @@ criterion = "0.3"
 name = "kk"
 harness = false
 
+[lib]
+bench = false
+
+[[bin]]
+name = "graph-drawing"
+bench = false
+
 [profile.release]
 debug = 1
