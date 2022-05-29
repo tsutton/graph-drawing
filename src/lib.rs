@@ -1,7 +1,7 @@
 pub mod graph;
 pub mod layout;
 
-use std::{cmp::Ordering, f64::consts::PI};
+use std::f64::consts::PI;
 
 use crate::graph::Graph;
 
@@ -206,19 +206,28 @@ impl KamadaKawaiDrawer {
             self.height,
         );
 
-        let distances = graph.all_pairs_shortest_paths();
-        let max_distance = distances
+        let nodes = graph.nodes;
+        let distances_raw = graph.all_pairs_shortest_paths();
+        let mut distances_flat = vec![0.0; graph.nodes * graph.nodes];
+        for i in 0..nodes {
+            for j in 0..nodes {
+                distances_flat[i * nodes + j] =
+                    distances_raw[i][j].expect("graph to be connected") as f64;
+            }
+        }
+
+        let max_distance = distances_raw
             .iter()
             .flatten()
-            .map(|x| x.expect("graph to be connected"))
             .max()
-            .expect("graph to be nonempty");
-        let draw_distance = self.width.min(self.height) / max_distance as f64;
+            .expect("graph to be nonempty")
+            .expect("graph to be nonempty") as f64;
+        let draw_distance = self.width.min(self.height) / max_distance;
 
         let mut deltas: Vec<f64> = (0..graph.nodes)
             .map(|i| {
                 let (dx, dy) =
-                    Self::jacobian(i, graph.nodes, &positions, &distances, draw_distance);
+                    Self::jacobian(i, graph.nodes, &positions, &distances_flat, draw_distance);
                 (dx.powi(2) + dy.powi(2)).sqrt()
             })
             .collect();
@@ -229,17 +238,18 @@ impl KamadaKawaiDrawer {
             let (m, max_delta) = deltas
                 .iter()
                 .enumerate()
-                .max_by(|(_, f), (_, g)| match f.partial_cmp(g) {
-                    Some(i) => i,
-                    // if we have NaN or inf, ???
-                    None => Ordering::Less,
+                .max_by(|(_, f), (_, g)| {
+                    f.partial_cmp(g)
+                        .expect("no non-comparable floats in deltas")
                 })
                 .expect("graph to be nonempty");
             if *max_delta < self.maximum_allowed_energy_derivative {
                 break;
             }
-            let hessian = Self::hessian_m(m, graph.nodes, &positions, &distances, draw_distance);
-            let jacobian = Self::jacobian(m, graph.nodes, &positions, &distances, draw_distance);
+            let hessian =
+                Self::hessian_m(m, graph.nodes, &positions, &distances_flat, draw_distance);
+            let jacobian =
+                Self::jacobian(m, graph.nodes, &positions, &distances_flat, draw_distance);
             let hessian_det = det(hessian);
             let delta_x =
                 det([[-jacobian.0, hessian[0][1]], [-jacobian.1, hessian[1][1]]]) / hessian_det;
@@ -257,7 +267,7 @@ impl KamadaKawaiDrawer {
             positions[m].x -= delta_x;
             positions[m].y -= delta_y;
             let (new_dx, new_dy) =
-                Self::jacobian(m, graph.nodes, &positions, &distances, draw_distance);
+                Self::jacobian(m, graph.nodes, &positions, &distances_flat, draw_distance);
             deltas[m] = (new_dx.powi(2) + new_dy.powi(2)).sqrt();
         }
         positions
@@ -267,7 +277,7 @@ impl KamadaKawaiDrawer {
         m: usize,
         nodes: usize,
         positions: &[Vector],
-        distances: &[Vec<Option<usize>>],
+        distances: &[f64],
         draw_distance: f64,
     ) -> (f64, f64) {
         (0..nodes)
@@ -275,7 +285,7 @@ impl KamadaKawaiDrawer {
                 if i == m {
                     (0.0, 0.0)
                 } else {
-                    let distance = distances[m][i].unwrap() as f64;
+                    let distance = distances[m * nodes + i];
                     let k_mi = Self::K / distance.powi(2);
                     let l_mi = draw_distance * distance;
                     let denominator = positions[m].distance_to(&positions[i]);
@@ -296,15 +306,18 @@ impl KamadaKawaiDrawer {
         m: usize,
         nodes: usize,
         positions: &[Vector],
-        distances: &[Vec<Option<usize>>],
+        distances: &[f64],
         draw_distance: f64,
     ) -> [[f64; 2]; 2] {
+        // For reasons I do not understand, local benchmarking indicates that keeping all four floats,
+        // instead of eliminating the redudant dy_dx (which is always the same as dx_dy), seems to be
+        // better for performance
         let (dx_dx, dx_dy, dy_dx, dy_dy) = (0..nodes)
             .map(|i| {
                 if i == m {
                     (0.0, 0.0, 0.0, 0.0)
                 } else {
-                    let distance = distances[m][i].unwrap() as f64;
+                    let distance = distances[m * nodes + i];
                     let k_mi = Self::K / distance.powi(2);
                     let l_mi = draw_distance * distance;
                     let denominator = positions[m].distance_to(&positions[i]);
