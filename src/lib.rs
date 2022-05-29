@@ -182,6 +182,15 @@ impl KamadaKawaiDrawer {
         }
     }
 
+    pub fn for_benchmarking() -> Self {
+        Self {
+            width: 400.0,
+            height: 400.0,
+            maximum_allowed_energy_derivative: 50.0,
+            init_strategy: InitializationStrategy::RegularPolygon,
+        }
+    }
+
     pub fn draw(&self, graph: &Graph) -> Vec<Vector> {
         if graph.nodes == 0 {
             return Vec::new();
