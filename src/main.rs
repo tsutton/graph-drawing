@@ -6,7 +6,7 @@ use graph_drawing::layout::Vector;
 use graph_drawing::KamadaKawaiFastDrawer;
 
 fn main() {
-    let drawer = KamadaKawaiFastDrawer::my_best_guess();
+    let drawer = KamadaKawaiFastDrawer::good();
 
     let grid_size = 10;
     let graph = grid_graph(grid_size);
@@ -18,6 +18,11 @@ fn main() {
     let positions = drawer.draw(&graph);
     let svg_document = to_svg(&graph, &positions);
     svg::save("out/torus.svg", &svg_document).unwrap();
+
+    let graph = torus_graph(8, 8);
+    let positions = drawer.draw(&graph);
+    let svg_document = to_svg(&graph, &positions);
+    svg::save("out/sq_torus.svg", &svg_document).unwrap();
 }
 
 fn to_svg(graph: &Graph, positions: &[Vector]) -> Document {

@@ -266,7 +266,7 @@ pub struct KamadaKawaiFastDrawer {
 }
 
 impl KamadaKawaiFastDrawer {
-    pub fn my_best_guess() -> Self {
+    pub fn fast() -> Self {
         Self {
             width: 400.0,
             height: 400.0,
@@ -275,8 +275,10 @@ impl KamadaKawaiFastDrawer {
         }
     }
 
-    pub fn for_benchmarking() -> Self {
-        Self::my_best_guess()
+    pub fn good() -> Self {
+        let mut r = Self::fast();
+        r.iteration_multiple *= 10;
+        r
     }
 
     pub fn draw(&self, graph: &Graph) -> Vec<Vector> {
