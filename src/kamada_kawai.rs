@@ -17,7 +17,7 @@ impl KamadaKawaiDrawer {
         Self {
             width: 400.0,
             height: 400.0,
-            maximum_allowed_energy_derivative: 1.0,
+            maximum_allowed_energy_derivative: 1e-7,
             init_strategy: InitializationStrategy::RegularPolygonRandomizedOrder,
         }
     }
@@ -26,7 +26,7 @@ impl KamadaKawaiDrawer {
         Self {
             width: 400.0,
             height: 400.0,
-            maximum_allowed_energy_derivative: 50.0,
+            maximum_allowed_energy_derivative: 1e-7,
             init_strategy: InitializationStrategy::RegularPolygon,
         }
     }
@@ -107,9 +107,8 @@ impl KamadaKawaiDrawer {
                     / jacobian_value.1
                     < 0.01,
             );
-            // TODO this is supposed to be +, not -, I must have flipped a sign some where, but I can't find where...
-            positions[m].x -= delta_x;
-            positions[m].y -= delta_y;
+            positions[m].x += delta_x;
+            positions[m].y += delta_y;
             let (new_dx, new_dy) =
                 jacobian(m, graph.nodes, &positions, &distances_flat, draw_distance);
             deltas[m] = (new_dx.powi(2) + new_dy.powi(2)).sqrt();
@@ -169,7 +168,7 @@ fn hessian_m(
                 let distance = distances[m * nodes + i];
                 let k_mi = K / distance.powi(2);
                 let l_mi = draw_distance * distance;
-                let denominator = positions[m].distance_to(&positions[i]);
+                let denominator = positions[m].distance_to(&positions[i]).powi(3);
                 (
                     k_mi * (1.0 - l_mi * (positions[m].y - positions[i].y).powi(2) / denominator),
                     k_mi * (l_mi
