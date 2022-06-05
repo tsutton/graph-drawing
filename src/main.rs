@@ -12,12 +12,12 @@ fn main() {
     let graph = grid_graph(grid_size);
     let positions = drawer.draw(&graph);
     let svg_document = to_svg(&graph, &positions);
-    svg::save("grid.svg", &svg_document).unwrap();
+    svg::save("out/grid.svg", &svg_document).unwrap();
 
     let graph = torus_graph(5, 15);
     let positions = drawer.draw(&graph);
     let svg_document = to_svg(&graph, &positions);
-    svg::save("torus.svg", &svg_document).unwrap();
+    svg::save("out/torus.svg", &svg_document).unwrap();
 }
 
 fn to_svg(graph: &Graph, positions: &[Vector]) -> Document {
