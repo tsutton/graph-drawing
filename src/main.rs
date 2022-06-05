@@ -3,39 +3,23 @@ use svg::{node, Document};
 
 use graph_drawing::graph::{cycle_graph, grid_graph, Graph};
 use graph_drawing::layout::Vector;
-use graph_drawing::KamadaKawaiDrawer;
+use graph_drawing::KamadaKawaiFastDrawer;
 
 fn main() {
-    let drawer = KamadaKawaiDrawer::my_best_guess();
+    let drawer = KamadaKawaiFastDrawer::my_best_guess();
 
-    // It seems like regular polygon is almost pathological for grid, because
-    // it ends up *twisted*, as a result it's really slow to get to the "real" answer
-    let grid_size = 5;
+    let grid_size = 10;
     let graph = grid_graph(grid_size);
-    // for ((i, j), w) in graph.all_pairs_shortest_paths() {
-    //     println!(
-    //         "({}, {})->({}, {}): {}",
-    //         i % grid_size,
-    //         (i - i % grid_size) / grid_size,
-    //         j % grid_size,
-    //         (j - j % grid_size) / grid_size,
-    //         w
-    //     )
-    // }
     let positions = drawer.draw(&graph);
     let svg_document = to_svg(&graph, &positions);
     svg::save("grid.svg", &svg_document).unwrap();
 
     let graph = cycle_graph(10);
-    // for ((i, j), w) in graph.all_pairs_shortest_paths() {
-    //     println!("{}->{}: {}", i, j, w)
-    // }
     let positions = drawer.draw(&graph);
     let svg_document = to_svg(&graph, &positions);
     svg::save("cycle.svg", &svg_document).unwrap();
 }
 
-// TODO draw edges
 fn to_svg(graph: &Graph, positions: &[Vector]) -> Document {
     debug_assert!(graph.nodes == positions.len());
     let mut document = Document::new();

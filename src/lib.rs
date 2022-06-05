@@ -164,7 +164,7 @@ impl FruchtermanReingoldDrawer {
 
 mod kamada_kawai;
 
-pub use kamada_kawai::KamadaKawaiDrawer;
+pub use kamada_kawai::{KamadaKawaiDrawer, KamadaKawaiFastDrawer};
 
 pub enum InitializationStrategy {
     Random,
