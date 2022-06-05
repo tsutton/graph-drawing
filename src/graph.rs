@@ -83,13 +83,21 @@ impl Default for Graph {
     }
 }
 
+/// A square grid graph, with each node connected to the left, right, above, and below nodes if those
+/// nodes aren't past the boundary.
+///
+/// For example, for nodes_across=3, the graph looks like:
+/// ```
+///  . - . - .
+///  |   |   |
+///  . - . - .
+///  |   |   |
+///  . - . - .
+/// ```
+/// The nodes are numbered consistent with left-to-right, top-to-bottom
 pub fn grid_graph(nodes_across: usize) -> Graph {
     let mut g = Graph::new();
     g.nodes = nodes_across * nodes_across;
-    // for n=2, we have the graph
-    //  . - .
-    //  |   |
-    //  . - .
     // we number nodes left to right top to bottom
     for x in 0..nodes_across {
         for y in 0..nodes_across {
@@ -105,11 +113,31 @@ pub fn grid_graph(nodes_across: usize) -> Graph {
     g
 }
 
+/// A graph with each node connect to its two neighbors, forming a cycle.
 pub fn cycle_graph(nodes: usize) -> Graph {
     let mut g = Graph::new();
     g.nodes = nodes;
     for i in 0..nodes {
         g.weights.insert((i, (i + 1) % nodes), 1);
+    }
+    g
+}
+
+/// A graph representation of a torus: a grid with the given dimensions, but with the
+/// nodes at the edge connected "around" to the opposite edge
+pub fn torus_graph(width: usize, height: usize) -> Graph {
+    let mut g = Graph::new();
+    g.nodes = width * height;
+    let node_num = |x, y| y * width + x;
+
+    for x in 0..width {
+        for y in 0..height {
+            let node = node_num(x, y);
+            let right_node = node_num((x + 1) % width, y);
+            let down_node = node_num(x, (y + 1) % height);
+            g.weights.insert((node, right_node), 1);
+            g.weights.insert((node, down_node), 1);
+        }
     }
     g
 }

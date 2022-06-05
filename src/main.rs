@@ -1,7 +1,7 @@
 use svg::node::element::{Circle, Line};
 use svg::{node, Document};
 
-use graph_drawing::graph::{cycle_graph, grid_graph, Graph};
+use graph_drawing::graph::{grid_graph, torus_graph, Graph};
 use graph_drawing::layout::Vector;
 use graph_drawing::KamadaKawaiFastDrawer;
 
@@ -14,10 +14,10 @@ fn main() {
     let svg_document = to_svg(&graph, &positions);
     svg::save("grid.svg", &svg_document).unwrap();
 
-    let graph = cycle_graph(10);
+    let graph = torus_graph(5, 15);
     let positions = drawer.draw(&graph);
     let svg_document = to_svg(&graph, &positions);
-    svg::save("cycle.svg", &svg_document).unwrap();
+    svg::save("torus.svg", &svg_document).unwrap();
 }
 
 fn to_svg(graph: &Graph, positions: &[Vector]) -> Document {
