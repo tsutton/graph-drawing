@@ -8,6 +8,12 @@ use crate::graph::Graph;
 use layout::Vector;
 use rand::prelude::SliceRandom;
 
+/// Implements the algorithm from [Ead84], following description in [Kou13].
+///
+/// For each pair of nodes, if the nodes have an edge, we give them an attract force proportional
+/// to log(distance between them/desired length).
+/// Then all non-adjacent nodes repel proportional to 1/distance^2.
+/// These forces are then simulated for a fixed number of iteration.
 pub struct EadesDrawer {
     hooke_constant: f64,
     ideal_length: f64,
@@ -85,10 +91,11 @@ impl EadesDrawer {
     }
 }
 
-/// Implements the algorithm from [FR91].
+/// Implements the algorithm from [FR91], following description in [K13].
 ///
-/// For each pair of nodes, if the nodes have an edge, we give them an attractive force proportional
-/// to 1/(distance between them). Then all nodes (even pairs with an edge) repel proportional to distance^2.
+/// For each pair of nodes, if the nodes have an edge, we give them an attract force proportional
+/// to (distance between them)^2. Then all nodes (even pairs with an edge) repel proportional to 1/distance.
+/// These two forces balance each other out exactly when connected nodes are at a chosen ideal distance.
 /// Then we iterate: calculate all the forces on all the nodes, apply those forces with some multiplier, and repeat.
 /// The multiplier starts out high and then reduces over time so that the nodes settle into place.
 pub struct FruchtermanReingoldDrawer {
