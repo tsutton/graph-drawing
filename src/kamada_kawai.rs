@@ -2,7 +2,7 @@ use super::InitializationStrategy;
 use crate::graph::Graph;
 use crate::layout::Vector;
 
-/// Implements draw based on the original Kamada Kawai 1989 paper [KK89].
+/// Implements draw based on the original Kamada Kawai 1989 paper \[KK89\].
 ///
 /// Assigns an energy function to the layout based on having all edges act as springs.
 /// The length of the spring is equal to the path-length along the graph between the nodes.
@@ -252,11 +252,11 @@ fn hessian_m_local(
     [[dx_dx, dx_dy], [dy_dx, dy_dy]]
 }
 
-/// Implements a more optimized variant of KK based on [HK01].
+/// Implements a more optimized variant of KK based on \[HK01\].
 ///
 /// The overall plan (minimize energy function by Newton's method) stays the same, but
 /// We use a more efficient implementation. We also choose to limit how many iterations to run for,
-/// although it means the final output might not be so great for large graphs - that's why [HK01] only uses
+/// although it means the final output might not be so great for large graphs - that's why \[HK01\] only uses
 /// this as a "local beautification" as part of a multi-scale strategy.
 pub struct KamadaKawaiFastDrawer {
     width: f64,
