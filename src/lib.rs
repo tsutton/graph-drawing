@@ -85,6 +85,12 @@ impl EadesDrawer {
     }
 }
 
+/// Implements the algorithm from [FR91].
+///
+/// For each pair of nodes, if the nodes have an edge, we give them an attractive force proportional
+/// to 1/(distance between them). Then all nodes (even pairs with an edge) repel proportional to distance^2.
+/// Then we iterate: calculate all the forces on all the nodes, apply those forces with some multiplier, and repeat.
+/// The multiplier starts out high and then reduces over time so that the nodes settle into place.
 pub struct FruchtermanReingoldDrawer {
     iterations: usize,
     width: f64,

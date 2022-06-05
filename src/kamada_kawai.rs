@@ -2,6 +2,14 @@ use super::InitializationStrategy;
 use crate::graph::Graph;
 use crate::layout::Vector;
 
+/// Implements draw based on the original Kamada Kawai 1989 paper [KK89].
+///
+/// Assigns an energy function to the layout based on having all edges act as springs.
+/// The length of the spring is equal to the path-length along the graph between the nodes.
+/// The goal is to minimize this energy - equivalently, find a zero of the derivatives of it.
+/// Those zeroes are found by Newton's method: we loop, picking the node whose contribution to the
+/// derivative is highest, then apply Netwon's method (similar to gradient descent) to move that one node.
+/// This is repeated until the derivatives are sufficiently small.
 pub struct KamadaKawaiDrawer {
     maximum_allowed_energy_derivative: f64,
     width: f64,
@@ -71,9 +79,6 @@ impl KamadaKawaiDrawer {
             })
             .collect();
         loop {
-            // Possible optimizations:
-            // - share subexpressions between jacobians and hessian
-            // - don't recalc jacobian when solving hessian system
             let (m, max_delta) = deltas
                 .iter()
                 .enumerate()
@@ -246,6 +251,13 @@ fn hessian_m_local(
         .unwrap();
     [[dx_dx, dx_dy], [dy_dx, dy_dy]]
 }
+
+/// Implements a more optimized variant of KK based on [HK01].
+///
+/// The overall plan (minimize energy function by Newton's method) stays the same, but
+/// We use a more efficient implementation. We also choose to limit how many iterations to run for,
+/// although it means the final output might not be so great for large graphs - that's why [HK01] only uses
+/// this as a "local beautification" as part of a multi-scale strategy.
 pub struct KamadaKawaiFastDrawer {
     width: f64,
     height: f64,
