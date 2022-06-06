@@ -5,6 +5,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
+nalgebra = "0.31.0"
 rand = "0.8.5"
 svg = "0.10.0"
 

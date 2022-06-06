@@ -258,6 +258,10 @@ fn hessian_m_local(
 /// We use a more efficient implementation. We also choose to limit how many iterations to run for,
 /// although it means the final output might not be so great for large graphs - that's why \[HK01\] only uses
 /// this as a "local beautification" as part of a multi-scale strategy.
+///
+/// The speed is enabled in part by only considering pairs of nodes whose path-distance is small (6 or less
+/// by default). As a result, this often produces pictures that are good locally, but globally might be
+/// folded or twisted.
 pub struct KamadaKawaiFastDrawer {
     width: f64,
     height: f64,

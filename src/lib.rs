@@ -14,6 +14,9 @@ pub use fruchterman_reingold::FruchtermanReingoldDrawer;
 mod kamada_kawai;
 pub use kamada_kawai::{KamadaKawaiDrawer, KamadaKawaiFastDrawer};
 
+mod stress_majorization;
+pub use stress_majorization::StressMajorization;
+
 pub enum InitializationStrategy {
     Random,
     RegularPolygon,
