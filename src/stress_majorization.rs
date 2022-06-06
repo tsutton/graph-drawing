@@ -7,6 +7,9 @@ pub struct StressMajorization {
     pub tolerance: f64,
 }
 
+// TODO use tolerence instead of a fixed number of iterations
+// TODO benchmark conjugate gradient instead of cholesky
+// TODO benchmark with flamegraph
 impl StressMajorization {
     pub fn draw(&self, graph: &Graph, width: f64, height: f64) -> Vec<Vector> {
         // strategy:
@@ -15,7 +18,7 @@ impl StressMajorization {
         // - Iterate until X(t+1) and X(t) are within tolerance:
         //   - Compute L^X(t)
         //   - Solve for X(t+1): L^w X(t+1)^(a) = L^X(t) X(t)^a, a = 1,2 (for 2-d embedding)
-        // X(t) is n-by-2 matrix,
+        // X(t) is n-by-2 matrix, whose rows are the positions.
         let distances_raw = graph.all_pairs_shortest_paths();
 
         let nodes = graph.nodes;
@@ -59,7 +62,6 @@ impl StressMajorization {
         for _ in 0..1000 {
             let l_x_prev = lz(&layout, &deltas);
             let sliced_lx = l_x_prev.slice((0, 0), (nodes - 1, nodes - 1));
-            // .clone() explanation: seems like Mul takes ownership
             let x_coord_rhs = sliced_lx * layout.column(0);
             let new_x_coords = decomposition.solve(&x_coord_rhs);
             let y_coord_rhs = sliced_lx * layout.column(1);
