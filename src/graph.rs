@@ -52,8 +52,6 @@ impl Graph {
 
         // We'll frame this iteratively (as opposed to recursively).
         for intermediate in 0..self.nodes {
-            let mut next_subproblem_cache: Vec<Vec<Option<usize>>> =
-                vec![vec![None; self.nodes]; self.nodes];
             for from_vertex in 0..self.nodes {
                 for to_vertex in 0..self.nodes {
                     let previous = subproblem_cache[from_vertex][to_vertex];
@@ -63,15 +61,14 @@ impl Graph {
                     match (previous, using_k) {
                         (None, None) => {}
                         (Some(x), None) | (None, Some(x)) => {
-                            next_subproblem_cache[from_vertex][to_vertex] = Some(x);
+                            subproblem_cache[from_vertex][to_vertex] = Some(x);
                         }
                         (Some(x), Some(y)) => {
-                            next_subproblem_cache[from_vertex][to_vertex] = Some(x.min(y));
+                            subproblem_cache[from_vertex][to_vertex] = Some(x.min(y));
                         }
                     }
                 }
             }
-            subproblem_cache = next_subproblem_cache;
         }
         subproblem_cache
     }
