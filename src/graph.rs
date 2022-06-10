@@ -1,34 +1,51 @@
-use std::collections::HashMap;
+use std::collections::BinaryHeap;
 
 // Let's say that our graphs are don't frequently change once constructed
-// They are weighted, but not directed
-// For Eades84 and  Fruchterman/Reingold91 we'll need to, in each iteration,
-// iterate through all pairs of vertices; for each pair, check the weight of edge
-// so perhaps an adjancency matrix is a good way to store it, considered as spare i.e. a hashmap
-// of (x, y) => weight pairs, where x < y
+// They are weighted, directed
 pub struct Graph {
     // one more than the largest value of a node in the graph
     pub nodes: usize,
-    // map (lower node, higher node ) => weight of that edge
-    pub weights: HashMap<(usize, usize), usize>,
+    // edges[i] = list of pairs (j, weight) where there's an edge of that weight from i to j
+    edge_lists: Vec<Vec<(usize, usize)>>,
 }
 
 impl Graph {
     pub fn new() -> Graph {
         Graph {
             nodes: 0,
-            weights: HashMap::new(),
+            edge_lists: Vec::new(),
+        }
+    }
+
+    pub fn from_edges_unchecked(nodes: usize, edges: Vec<Vec<(usize, usize)>>) -> Self {
+        Self {
+            nodes,
+            edge_lists: edges,
         }
     }
 
     pub fn edge_weight(&self, node1: usize, node2: usize) -> Option<usize> {
-        self.weights
-            .get(&(node1.min(node2), node1.max(node2)))
-            .copied()
+        self.edge_lists.get(node1).and_then(|edges| {
+            edges
+                .iter()
+                .find(|(j, _)| *j == node2)
+                .map(|(_, weight)| *weight)
+        })
     }
 
     pub fn edges(&'_ self) -> impl Iterator<Item = ((usize, usize), usize)> + '_ {
-        self.weights.iter().map(|((a, b), c)| ((*a, *b), *c))
+        self.edge_lists
+            .iter()
+            .enumerate()
+            .flat_map(|(source, edges)| {
+                edges
+                    .iter()
+                    .map(move |(target, weight)| ((source, *target), *weight))
+            })
+    }
+
+    pub fn edges_from(&'_ self, from: usize) -> impl Iterator<Item = (usize, usize)> + '_ {
+        self.edge_lists[from].iter().copied()
     }
 
     pub fn all_pairs_shortest_paths(&self) -> Vec<Vec<Option<usize>>> {
@@ -93,53 +110,85 @@ impl Default for Graph {
 /// ```
 /// The nodes are numbered consistent with left-to-right, top-to-bottom
 pub fn grid_graph(nodes_across: usize) -> Graph {
-    let mut g = Graph::new();
-    g.nodes = nodes_across * nodes_across;
+    let nodes = nodes_across * nodes_across;
+    let mut edges = Vec::with_capacity(nodes);
     // we number nodes left to right top to bottom
-    for x in 0..nodes_across {
-        for y in 0..nodes_across {
+    for y in 0..nodes_across {
+        for x in 0..nodes_across {
             let node_num = y * nodes_across + x;
+            let mut edges_from_node = Vec::new();
             if x + 1 < nodes_across {
-                g.weights.insert((node_num, node_num + 1), 1);
+                edges_from_node.push((node_num + 1, 1));
             }
             if y + 1 < nodes_across {
-                g.weights.insert((node_num, node_num + nodes_across), 1);
+                edges_from_node.push((node_num + nodes_across, 1));
             }
+            edges.push(edges_from_node);
         }
     }
-    g
+    Graph::from_edges_unchecked(nodes, edges)
 }
 
 /// A graph with each node connect to its two neighbors, forming a cycle.
 pub fn cycle_graph(nodes: usize) -> Graph {
-    let mut g = Graph::new();
-    g.nodes = nodes;
+    let mut edges = Vec::with_capacity(nodes);
     for i in 0..nodes {
-        g.weights.insert((i, (i + 1) % nodes), 1);
+        let edges_from_node = if i == 0 {
+            vec![(1, 1), (nodes - 1, 1)]
+        } else {
+            vec![(nodes + 1, 1)]
+        };
+        edges.push(edges_from_node)
     }
-    g
+    Graph::from_edges_unchecked(nodes, edges)
 }
 
 /// A graph representation of a torus: a grid with the given dimensions, but with the
 /// nodes at the edge connected "around" to the opposite edge
 pub fn torus_graph(width: usize, height: usize) -> Graph {
-    let mut g = Graph::new();
-    g.nodes = width * height;
+    let nodes = width * height;
     let node_num = |x, y| y * width + x;
+    let mut edges = vec![Vec::new(); nodes];
 
-    for x in 0..width {
-        for y in 0..height {
+    for y in 0..height {
+        for x in 0..width {
             let node = node_num(x, y);
             let right_node = node_num((x + 1) % width, y);
             let down_node = node_num(x, (y + 1) % height);
-            g.weights.insert((node, right_node), 1);
-            g.weights.insert((node, down_node), 1);
+            // TODO use min max
+            edges[node.min(right_node)].push((node.max(right_node), 1));
+            edges[node.min(down_node)].push((node.max(down_node), 1));
         }
     }
-    g
+    Graph::from_edges_unchecked(nodes, edges)
 }
 
 // other graphs to test
 // cubes
 // serpinski triangle
 // petersen graph
+
+// DijskstraState and associated impls adapted from std::collections::binary_heap example.
+#[derive(Copy, Clone, Eq, PartialEq)]
+struct DijkstraState {
+    cost: usize,
+    position: usize,
+}
+
+impl std::cmp::Ord for DijkstraState {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // Notice that the we flip the ordering on costs.
+        // In case of a tie we compare positions - this step is necessary
+        // to make implementations of `PartialEq` and `Ord` consistent.
+        other
+            .cost
+            .cmp(&self.cost)
+            .then_with(|| self.position.cmp(&other.position))
+    }
+}
+
+impl PartialOrd for DijkstraState {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
