@@ -49,6 +49,75 @@ impl Graph {
     }
 
     pub fn all_pairs_shortest_paths(&self) -> Vec<Vec<Option<usize>>> {
+        // I picked a completely arbitrary heuristic between using Floyd-Warshall which is O(V^3) and Dijkstra which is O(VE + V^2 logV)
+        // if there are a lot of edges (E > V^2/20, note the max possible is ~V^2/2), do the V^3 one.
+        // Note that we are relying on the fact that edges are positive in using Dijkstra, since it doesn't work on negative edges.
+        // In fact it might be reasonable to delete the Floyd-Warshall implementation...
+        // if self.weights.len() * 20 > self.nodes * self.nodes {
+        //     self.floyd_warshall()
+        // } else {
+        self.dijkstra()
+        // }
+        // self.floyd_warshall()
+    }
+
+    fn dijkstra(&self) -> Vec<Vec<Option<usize>>> {
+        (0..self.nodes)
+            .map(|i| self.dijkstra_one_source(i))
+            .collect()
+    }
+
+    // Returns the length of the shortest path from starting node to each node,
+    // or None if the graph is not connected.
+    // Very lightly adapted from the implementation example in std::collections::binary_heap.
+    fn dijkstra_one_source(&self, starting_node: usize) -> Vec<Option<usize>> {
+        // This is a medium-optimized version of Dijskstra's algorithm.
+        // (T)his comment assumes basic familiarity with Dijsktra's alg.)
+        // The best asymptotic complexity versions use a priority queue mapping keys to priorities,
+        // that also includes a fast decrease_priority_of_key(key, new_priority) function,
+        // or generally allow looking up the priority of a given key, rather than just the standard
+        // insert_key_with_priority() and pop_min() functions.
+        // In place of that, we'll use a strategy that might have a key appear twice in the queue, but
+        // maintain the mapping of keys to priorities separatenly in a Vec (since keys are just usizes).
+        // Then, during our loop, if we pop_min and find that that (key, priority) pair is actually
+        // worse than some other path we've found since that pair was pushed to the queue, we skip the loop body.
+        // let mut queue = BinaryHeap::new();
+        let mut distances = vec![None; self.nodes];
+        distances[starting_node] = Some(0);
+        let mut pqueue = BinaryHeap::new();
+        pqueue.push(DijkstraState {
+            cost: 0,
+            position: starting_node,
+        });
+        while let Some(DijkstraState { cost, position }) = pqueue.pop() {
+            if distances[position]
+                .map(|known_cost| known_cost < cost)
+                .unwrap_or(false)
+            {
+                continue;
+            }
+            for (target, weight) in self.edges_from(position) {
+                let next = DijkstraState {
+                    cost: cost + weight,
+                    position: target,
+                };
+
+                // If so, add it to the frontier and continue
+                if distances[next.position]
+                    .map(|known_cost| known_cost > next.cost)
+                    .unwrap_or(true)
+                {
+                    pqueue.push(next);
+                    // Relaxation, we have now found a better way
+                    distances[next.position] = Some(next.cost);
+                }
+            }
+        }
+
+        distances
+    }
+
+    fn floyd_warshall(&self) -> Vec<Vec<Option<usize>>> {
         // We follow Floyd-Warshall (simplified for undirected graphs):
         // Incrementally solve and store the subproblems APSP(from_vertex, to_vertex)
         // which may be Some(value), or None if the vertices aren't connected yet.
@@ -169,7 +238,7 @@ pub fn torus_graph(width: usize, height: usize) -> Graph {
 // petersen graph
 
 // DijskstraState and associated impls adapted from std::collections::binary_heap example.
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 struct DijkstraState {
     cost: usize,
     position: usize,
@@ -190,5 +259,45 @@ impl std::cmp::Ord for DijkstraState {
 impl PartialOrd for DijkstraState {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::grid_graph;
+
+    #[test]
+    fn test_grid() {
+        let graph = grid_graph(3);
+        assert_eq!(graph.edges().count(), 12);
+        assert_eq!(graph.edge_weight(0, 1).unwrap(), 1);
+        assert_eq!(graph.edge_weight(0, 3).unwrap(), 1);
+        assert_eq!(graph.edge_weight(1, 0).unwrap(), 1);
+        assert_eq!(graph.edge_weight(3, 0).unwrap(), 1);
+        assert_eq!(
+            graph.edges_from(0).collect::<Vec<_>>(),
+            vec![(1, 1), (3, 1),]
+        );
+        assert!(graph.edge_weight(0, 2).is_none());
+    }
+
+    #[test]
+    fn test_grid_dijkstra() {
+        let graph = grid_graph(3);
+        let paths_from_one = graph.dijkstra_one_source(0);
+        assert_eq!(
+            paths_from_one,
+            vec![
+                Some(0),
+                Some(1),
+                Some(2),
+                Some(1),
+                Some(2),
+                Some(3),
+                Some(2),
+                Some(3),
+                Some(4),
+            ]
+        )
     }
 }

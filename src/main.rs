@@ -9,21 +9,22 @@ fn main() {
     // let drawer = KamadaKawaiFastDrawer::good();
     let drawer = StressMajorization { tolerance: 10e-4 };
 
-    let grid_size = 30;
+    let grid_size = 3;
     let graph = grid_graph(grid_size);
+    println!("{:?}", graph.all_pairs_shortest_paths());
     let positions = drawer.draw(&graph, 400.0, 400.0);
     let svg_document = to_svg(&graph, &positions);
     svg::save("out/grid.svg", &svg_document).unwrap();
 
-    let graph = torus_graph(6, 20);
-    let positions = drawer.draw(&graph, 400.0, 400.0);
-    let svg_document = to_svg(&graph, &positions);
-    svg::save("out/torus.svg", &svg_document).unwrap();
+    // let graph = torus_graph(10, 40);
+    // let positions = drawer.draw(&graph, 400.0, 400.0);
+    // let svg_document = to_svg(&graph, &positions);
+    // svg::save("out/torus.svg", &svg_document).unwrap();
 
-    let graph = torus_graph(8, 8);
-    let positions = drawer.draw(&graph, 400.0, 400.0);
-    let svg_document = to_svg(&graph, &positions);
-    svg::save("out/sq_torus.svg", &svg_document).unwrap();
+    // let graph = torus_graph(8, 8);
+    // let positions = drawer.draw(&graph, 400.0, 400.0);
+    // let svg_document = to_svg(&graph, &positions);
+    // svg::save("out/sq_torus.svg", &svg_document).unwrap();
 }
 
 fn to_svg(graph: &Graph, positions: &[Vector]) -> Document {
