@@ -49,19 +49,10 @@ impl Graph {
     }
 
     pub fn all_pairs_shortest_paths(&self) -> Vec<Vec<Option<usize>>> {
-        // I picked a completely arbitrary heuristic between using Floyd-Warshall which is O(V^3) and Dijkstra which is O(VE + V^2 logV)
-        // if there are a lot of edges (E > V^2/20, note the max possible is ~V^2/2), do the V^3 one.
-        // Note that we are relying on the fact that edges are positive in using Dijkstra, since it doesn't work on negative edges.
-        // In fact it might be reasonable to delete the Floyd-Warshall implementation...
-        // if self.weights.len() * 20 > self.nodes * self.nodes {
-        //     self.floyd_warshall()
-        // } else {
         self.dijkstra()
-        // }
-        // self.floyd_warshall()
     }
 
-    fn dijkstra(&self) -> Vec<Vec<Option<usize>>> {
+    pub fn dijkstra(&self) -> Vec<Vec<Option<usize>>> {
         (0..self.nodes)
             .map(|i| self.dijkstra_one_source(i))
             .collect()
@@ -70,7 +61,7 @@ impl Graph {
     // Returns the length of the shortest path from starting node to each node,
     // or None if the graph is not connected.
     // Very lightly adapted from the implementation example in std::collections::binary_heap.
-    fn dijkstra_one_source(&self, starting_node: usize) -> Vec<Option<usize>> {
+    pub fn dijkstra_one_source(&self, starting_node: usize) -> Vec<Option<usize>> {
         // This is a medium-optimized version of Dijskstra's algorithm.
         // (T)his comment assumes basic familiarity with Dijsktra's alg.)
         // The best asymptotic complexity versions use a priority queue mapping keys to priorities,
@@ -117,7 +108,7 @@ impl Graph {
         distances
     }
 
-    fn floyd_warshall(&self) -> Vec<Vec<Option<usize>>> {
+    pub fn floyd_warshall(&self) -> Vec<Vec<Option<usize>>> {
         // We follow Floyd-Warshall (simplified for undirected graphs):
         // Incrementally solve and store the subproblems APSP(from_vertex, to_vertex)
         // which may be Some(value), or None if the vertices aren't connected yet.
@@ -170,7 +161,7 @@ impl Default for Graph {
 /// nodes aren't past the boundary.
 ///
 /// For example, for nodes_across=3, the graph looks like:
-/// ```
+/// ```text
 ///  . - . - .
 ///  |   |   |
 ///  . - . - .
@@ -189,8 +180,14 @@ pub fn grid_graph(nodes_across: usize) -> Graph {
             if x + 1 < nodes_across {
                 edges_from_node.push((node_num + 1, 1));
             }
+            if x > 0 {
+                edges_from_node.push((node_num - 1, 1));
+            }
             if y + 1 < nodes_across {
                 edges_from_node.push((node_num + nodes_across, 1));
+            }
+            if y > 0 {
+                edges_from_node.push((node_num - nodes_across, 1));
             }
             edges.push(edges_from_node);
         }
@@ -202,11 +199,7 @@ pub fn grid_graph(nodes_across: usize) -> Graph {
 pub fn cycle_graph(nodes: usize) -> Graph {
     let mut edges = Vec::with_capacity(nodes);
     for i in 0..nodes {
-        let edges_from_node = if i == 0 {
-            vec![(1, 1), (nodes - 1, 1)]
-        } else {
-            vec![(nodes + 1, 1)]
-        };
+        let edges_from_node = vec![((i + 1) % nodes, 1), ((nodes + i - 1) % nodes, 1)];
         edges.push(edges_from_node)
     }
     Graph::from_edges_unchecked(nodes, edges)
@@ -224,9 +217,10 @@ pub fn torus_graph(width: usize, height: usize) -> Graph {
             let node = node_num(x, y);
             let right_node = node_num((x + 1) % width, y);
             let down_node = node_num(x, (y + 1) % height);
-            // TODO use min max
-            edges[node.min(right_node)].push((node.max(right_node), 1));
-            edges[node.min(down_node)].push((node.max(down_node), 1));
+            edges[node].push((right_node, 1));
+            edges[node].push((down_node, 1));
+            edges[right_node].push((node, 1));
+            edges[down_node].push((node, 1));
         }
     }
     Graph::from_edges_unchecked(nodes, edges)
@@ -269,7 +263,7 @@ mod test {
     #[test]
     fn test_grid() {
         let graph = grid_graph(3);
-        assert_eq!(graph.edges().count(), 12);
+        assert_eq!(graph.edges().count(), 24);
         assert_eq!(graph.edge_weight(0, 1).unwrap(), 1);
         assert_eq!(graph.edge_weight(0, 3).unwrap(), 1);
         assert_eq!(graph.edge_weight(1, 0).unwrap(), 1);
