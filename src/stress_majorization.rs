@@ -7,9 +7,7 @@ pub struct StressMajorization {
     pub tolerance: f64,
 }
 
-// TODO use tolerence instead of a fixed number of iterations
 // TODO benchmark conjugate gradient instead of cholesky
-// TODO benchmark with flamegraph
 impl StressMajorization {
     pub fn draw(&self, graph: &Graph, width: f64, height: f64) -> Vec<Vector> {
         // strategy:
@@ -59,7 +57,8 @@ impl StressMajorization {
                 1.0 / distances_raw[row][col].unwrap() as f64
             }
         });
-        for _ in 0..1000 {
+        let mut current_stress = stress(&distances_raw, &layout);
+        for i in 0.. {
             let l_x_prev = lz(&layout, &deltas);
             let sliced_lx = l_x_prev.slice((0, 0), (nodes - 1, nodes - 1));
             let x_coord_rhs = sliced_lx * layout.column(0);
@@ -74,6 +73,12 @@ impl StressMajorization {
                     < 10e-4
             );
             layout = MatrixXx2::from_columns(&[new_x_coords, new_y_coords]);
+            let new_stress = stress(&distances_raw, &layout);
+            let relative_diff = (current_stress - new_stress) / current_stress;
+            if relative_diff.abs() < self.tolerance {
+                break;
+            }
+            current_stress = new_stress;
         }
         let min_x = layout.column(0).min().min(0.0);
         let min_y = layout.column(1).min().min(0.0);
@@ -90,6 +95,24 @@ impl StressMajorization {
     }
 }
 
+// assumptions: distances.len() == distances[i].len() == layout.shape().0 + 1, layout has a magic "0" at the end
+fn stress(distances: &[Vec<Option<usize>>], layout: &MatrixXx2<f64>) -> f64 {
+    let mut sum = 0.0;
+    for i in 0..distances.len() {
+        for j in 0..i {
+            let distance = distances[i][j].expect("graph to be connected") as f64;
+            let w = 1.0 / (distance * distance);
+            let stress_ij = if i == distances.len() - 1 {
+                w * (layout.row(j).norm() - distance * distance)
+            } else {
+                w * ((layout.row(j) - layout.row(i)).norm() - distance * distance)
+            };
+            sum += stress_ij;
+        }
+    }
+    sum
+}
+
 // L^Z in the paper
 // This function pretends that z has an extra (0,0) at the end, and returns a matching L^Z,
 // so the caller should slice off the last row/column
@@ -99,7 +122,7 @@ fn lz(
 ) -> Matrix<f64, Dynamic, Dynamic, nalgebra::VecStorage<f64, nalgebra::Dynamic, nalgebra::Dynamic>>
 {
     let nodes = z.shape().0 + 1;
-    let inverses = DMatrix::from_fn(nodes, nodes, |row, col| {
+    let mut ret = DMatrix::from_fn(nodes, nodes, |row, col| {
         // manifest a magical row of (0.0, 0.0) at z.row(nodes-1)
         let norm = if row == col {
             0.0
@@ -113,10 +136,9 @@ fn lz(
         if norm == 0.0 {
             0.0
         } else {
-            -1.0 / norm
+            -deltas[(row, col)] / norm
         }
     });
-    let mut ret = inverses.component_mul(deltas);
     for i in 0..z.shape().0 {
         ret[(i, i)] = -ret.column(i).sum()
     }
