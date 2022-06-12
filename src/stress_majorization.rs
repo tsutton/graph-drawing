@@ -2,12 +2,22 @@ use nalgebra::{Const, DMatrix, Dynamic, Matrix, MatrixXx2, OMatrix};
 
 use crate::{graph::Graph, layout::Vector};
 
+/// Draws graphs using the Stress Majorization method from \[GKN05\]
+///
+/// This method uses finds a minimum of an energy function that tries to make each pair of nodes
+/// have physical distance equal to the shortest-path distance (similar to Kamada Kawai), putting higher
+/// value on having nodes with smaller path distance have the correct physical distance.
+/// It uses a clever mathematical trick to turn this optimization into repeatedly solving matrix equations,
+/// for which there are highly optimized algorithms and implementations.
 pub struct StressMajorization {
     // Paper recommends 10e-4
     pub tolerance: f64,
 }
 
 // TODO benchmark conjugate gradient instead of cholesky
+// TODO implement weighted edge lengths (paper section 3)
+// TODO implement sparse energy functions (paper section 4)
+// TODO (maybe?) implement restricted subspace and smart initialization (paper section 5)
 impl StressMajorization {
     pub fn draw(&self, graph: &Graph, width: f64, height: f64) -> Vec<Vector> {
         // strategy:
@@ -18,23 +28,33 @@ impl StressMajorization {
         //   - Solve for X(t+1): L^w X(t+1)^(a) = L^X(t) X(t)^a, a = 1,2 (for 2-d embedding)
         // X(t) is n-by-2 matrix, whose rows are the positions.
         let distances_raw = graph.all_pairs_shortest_paths();
+        let distances = distances_raw
+            .into_iter()
+            .map(|distances_single_row| {
+                distances_single_row
+                    .into_iter()
+                    .map(|w| w.expect("graph to be connected") as f64)
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
 
         let nodes = graph.nodes;
         // Note: w_ij = 1/d_ij^2
         // Note: it's a bit more convenient to code the *last* vertex at (0,0), rather than the first like the paper
         let weighted_laplacan = DMatrix::from_fn(nodes - 1, nodes - 1, |row, col| {
             if row == col {
-                distances_raw[row]
+                distances[row]
                     .iter()
                     .enumerate()
                     .filter(|(i, _)| *i != row)
-                    .map(|(_, w)| 1.0 / (w.expect("graph to be connected") as f64).powi(2))
+                    .map(|(_, w)| 1.0 / w.powi(2))
                     .sum::<f64>()
             } else {
-                -1.0 / (distances_raw[row][col].expect("graph to be connected") as f64).powi(2)
+                -1.0 / distances[row][col].powi(2)
             }
         });
-        // used for a debug assertion below
+
+        // Used for a debug assertion below.
         let original_weighted_laplacian = weighted_laplacan.clone();
 
         let decomposition = weighted_laplacan
@@ -54,11 +74,11 @@ impl StressMajorization {
             if row == col {
                 0.0
             } else {
-                1.0 / distances_raw[row][col].unwrap() as f64
+                1.0 / distances[row][col]
             }
         });
-        let mut current_stress = stress(&distances_raw, &layout);
-        for i in 0.. {
+        let mut current_stress = stress(&distances, &layout);
+        loop {
             let l_x_prev = lz(&layout, &deltas);
             let sliced_lx = l_x_prev.slice((0, 0), (nodes - 1, nodes - 1));
             let x_coord_rhs = sliced_lx * layout.column(0);
@@ -73,7 +93,7 @@ impl StressMajorization {
                     < 10e-4
             );
             layout = MatrixXx2::from_columns(&[new_x_coords, new_y_coords]);
-            let new_stress = stress(&distances_raw, &layout);
+            let new_stress = stress(&distances, &layout);
             let relative_diff = (current_stress - new_stress) / current_stress;
             if relative_diff.abs() < self.tolerance {
                 break;
@@ -96,11 +116,11 @@ impl StressMajorization {
 }
 
 // assumptions: distances.len() == distances[i].len() == layout.shape().0 + 1, layout has a magic "0" at the end
-fn stress(distances: &[Vec<Option<usize>>], layout: &MatrixXx2<f64>) -> f64 {
+fn stress(distances: &[Vec<f64>], layout: &MatrixXx2<f64>) -> f64 {
     let mut sum = 0.0;
     for i in 0..distances.len() {
         for j in 0..i {
-            let distance = distances[i][j].expect("graph to be connected") as f64;
+            let distance = distances[i][j];
             let w = 1.0 / (distance * distance);
             let stress_ij = if i == distances.len() - 1 {
                 w * (layout.row(j).norm() - distance * distance)
@@ -116,8 +136,12 @@ fn stress(distances: &[Vec<Option<usize>>], layout: &MatrixXx2<f64>) -> f64 {
 // L^Z in the paper
 // This function pretends that z has an extra (0,0) at the end, and returns a matching L^Z,
 // so the caller should slice off the last row/column
+// Forcing the caller to slice it off simplifies ownership: this function needs to return an owned matrix,
+// which means it would need to allocate the non-truncated matrix, then allocate another matrix for the truncated matrix
+// to return. But if we force the caller to slice off the last bit, the truncated matrix doesn't require an allocation since
+// it can just refer to the allocation of the non-truncated one via borrowing.
 fn lz(
-    z: &MatrixXx2<f64>,
+    z: &MatrixXx2<f64>,    // (n-1) x 2
     deltas: &DMatrix<f64>, // n x n matrix of deltas_ij = delta_ij as in paper
 ) -> Matrix<f64, Dynamic, Dynamic, nalgebra::VecStorage<f64, nalgebra::Dynamic, nalgebra::Dynamic>>
 {
